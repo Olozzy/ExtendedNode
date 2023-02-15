@@ -10,9 +10,18 @@ const jsonTree = {
     }
 }
 
+function toPosix(str) {
+    try {
+        return str.replaceAll('\\', '/')
+    } catch {
+        return str[0].replaceAll('\\', '/')
+    }
+
+}
+
 class ExtendedNode {
 
-    walk(obj, type = "dir", args = {}) {
+    walk(obj, options = {}) {
         function walkJSON(options) {
             const keyList = Object.keys(obj)
 
@@ -61,27 +70,39 @@ class ExtendedNode {
 
         }
 
-        function walkDir2(objpath) {
+        function walkDir2(objpath, options) {
+            objpath = options.relative ? objpath : path.resolve(objpath)
+
             if(!fs.statSync(objpath).isDirectory()) {
                 throw Error("es.walk(path) > path must be path for a folder not file!")
             }
 
-            let loopList = fs.readdirSync(obj).map(item => {
-                return { name: item, path: [obj] }
+            let loopList = fs.readdirSync(objpath).map(item => {
+                return { name: item, path: [options.relative ? obj : objpath] }
             })
             let doneList = []
             
             function run() {
                 doneList.push(...loopList.reduce((acc, obj) => {
-                    const objPath = path.join(...obj.path, obj.name)
+                    console.log(obj.path[0], obj.name)
+                    const objPath = path.join(obj.path[0], obj.name)
     
                     if (fs.statSync(objPath).isFile()) {
-                        acc.push(objPath)
+
+                        if (options.advancedData) {
+                            acc.push({
+                                fullPath: options.posix ? toPosix(objPath) : obj.path,
+                                path: options.posix ? toPosix(obj.path) : obj.path,
+                                name: obj.name 
+                            })
+                        } else {
+                            acc.push(toPosix(objPath))
+                        }
+
     
                     } else if (fs.statSync(objPath).isDirectory()) {
-                        console.log(objPath)
     
-                        loopList.push(...fs.readdirSync(objPath).map(item => {return {name: item, path: [objPath]}} ))
+                        loopList.push(...fs.readdirSync(objPath).map(item => {return {name: item, path: [options.posix ? toPosix(objPath) : obj.path]}} ))
                     }
     
                     loopList = loopList.filter(item => item !== obj)
@@ -145,11 +166,11 @@ class ExtendedNode {
 
 
 
-        type = type.toLowerCase()
+        const type = options.type.toLowerCase()
         if (type == "json") {
             return walkJSON(args)
         } else if (type == "dir") {
-            return walkDir2(obj)
+            return walkDir2(obj, options)
         }
 
     }
