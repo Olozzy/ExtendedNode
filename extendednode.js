@@ -61,16 +61,49 @@ class ExtendedNode {
 
         }
 
-        function walkDir(options) {
-            const keyList = fs.readdirSync(obj)
-
-            let doneList = []
-            let loopList = []
-
-            for (const key of keyList) {
-                loopList.push({ name: key, path: [obj] })
+        function walkDir2(objpath) {
+            if(!fs.statSync(objpath).isDirectory()) {
+                throw Error("es.walk(path) > path must be path for a folder not file!")
             }
 
+            let loopList = fs.readdirSync(obj).map(item => {
+                return { name: item, path: [obj] }
+            })
+            let doneList = []
+            
+            function run() {
+                doneList.push(...loopList.reduce((acc, obj) => {
+                    const objPath = path.join(...obj.path, obj.name)
+    
+                    if (fs.statSync(objPath).isFile()) {
+                        acc.push(objPath)
+    
+                    } else if (fs.statSync(objPath).isDirectory()) {
+                        console.log(objPath)
+    
+                        loopList.push(...fs.readdirSync(objPath).map(item => {return {name: item, path: [objPath]}} ))
+                    }
+    
+                    loopList = loopList.filter(item => item !== obj)
+                    
+                    return acc
+                }, []))
+            }
+
+            while (loopList.length > 0) {
+                run()
+            }
+
+            return doneList
+        }
+
+        function walkDir(options) {
+
+            let loopList = fs.readdirSync(obj).map(item => {
+                return { name: item, path: [obj] }
+            })
+
+            let doneList = []
             let didClean = false;
 
             function simplify() {
@@ -79,25 +112,23 @@ class ExtendedNode {
                 for (const obj of loopList) {
                     const fullPath = path.join(...obj.path, obj.name)
 
-                    if (!fs.statSync(fullPath).isDirectory()) {
+                    if (fs.statSync(fullPath).isFile()) {
 
                         doneList.push(fullPath)
 
                         loopList = loopList.filter(item => item !== obj)
 
-                    } else {
+                    } else if (fs.statSync(fullPath).isDirectory()) {
                         didClean = false;
 
-                        let newList = fs.readdirSync(fullPath)
-                        for (const key of newList) {
-                            loopList.push({ name: key, path: [...obj.path, obj.name] })
-                        }
-
+                        fs.readdirSync(fullPath).forEach(item => {
+                            loopList.push({ name: item, path: [...obj.path, obj.name] })
+                        })
 
                         loopList = loopList.filter(item => item !== obj)
-
                     }
                 }
+
                 if (didClean) {
                     return doneList
                 }
@@ -109,8 +140,6 @@ class ExtendedNode {
                     return done
                 }
             }
-
-
         }
 
 
@@ -120,7 +149,7 @@ class ExtendedNode {
         if (type == "json") {
             return walkJSON(args)
         } else if (type == "dir") {
-            return walkDir(args)
+            return walkDir2(obj)
         }
 
     }
